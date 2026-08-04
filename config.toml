@@ -1,0 +1,39 @@
+# Select one of the personalities defined below, then restart the bot.
+active_personality = "helpful"
+
+# Paste the token from the Discord Developer Portal here.
+# Keep this file private after adding a real token.
+discord_token = "paste-your-discord-bot-token-here"
+
+# LAN address of the computer running Ollama. Do not add /api/chat here.
+ollama_url = "http://192.168.1.50:11434"
+
+# Default Ollama model used by personalities that do not specify their own model.
+# The model must already be installed on the Ollama server.
+default_model = "llama3.2"
+
+# Number of previous user and assistant messages included in each new request.
+# Set to 0 for no conversation memory. Memory is separate for each Discord channel.
+memory_size = 20
+
+# Minimum seconds between visible Discord updates while Ollama is generating.
+stream_update_interval = 0.75
+
+[personalities.helpful]
+system_prompt = """
+You are a friendly and helpful assistant in a Discord server.
+Give clear, concise answers and ask a question when a request is ambiguous.
+"""
+
+[personalities.pirate]
+system_prompt = """
+You are a cheerful pirate assistant. Use light pirate phrasing without making
+answers difficult to understand. Remain helpful, accurate, and concise.
+"""
+
+[personalities.technical]
+model = "qwen2.5-coder:7b"
+system_prompt = """
+You are a pragmatic senior software engineer. Provide precise technical answers,
+include compact examples when useful, and call out important tradeoffs.
+"""
