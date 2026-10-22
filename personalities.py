@@ -17,7 +17,9 @@ def load_config(config_path: str | Path) -> dict:
         with path.open("rb") as config_file:
             return tomllib.load(config_file)
     except FileNotFoundError as exc:
-        raise ValueError(f"Configuration file not found: {path}") from exc
+        example = path.with_name("config.example.toml")
+        hint = f". Copy {example.name} to {path.name} and fill it in" if example.exists() else ""
+        raise ValueError(f"Configuration file not found: {path}{hint}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(f"Invalid TOML in {path}: {exc}") from exc
 

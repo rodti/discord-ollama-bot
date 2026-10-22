@@ -1,3 +1,7 @@
+# Example settings. Copy this file to config.toml and edit the copy:
+#   cp config.example.toml config.toml
+# config.toml is ignored by git, so pulling updates never changes it.
+
 # Select one of the personalities defined below, then restart the bot.
 active_personality = "helpful"
 

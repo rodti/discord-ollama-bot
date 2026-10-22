@@ -3,7 +3,12 @@ import unittest
 from unittest import mock
 from types import SimpleNamespace
 
-import bot as bot_module
+import os
+
+# The tests run against the example settings, not a real config.toml.
+os.environ.setdefault("CONFIG_FILE", "config.example.toml")
+
+import bot as bot_module  # noqa: E402
 
 
 STREAM_LINES = [

@@ -37,8 +37,14 @@ compiler tools on Python 3.14 because a prebuilt package may not be available.
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+cp config.example.toml config.toml
 cp .env.example .env
 ```
+
+Your settings live in `config.toml`, a copy of the example. Git ignores it, so
+`git pull` never changes your settings. When an update adds a new setting, the
+bot uses its default until you copy it into your `config.toml` from
+`config.example.toml`.
 
 Set the Discord token and Ollama endpoint near the top of `config.toml`:
 

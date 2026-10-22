@@ -180,6 +180,14 @@ class StreamingConfigTests(unittest.TestCase):
                 load_ollama_url(path)
 
 
+class MissingConfigTests(unittest.TestCase):
+    def test_points_to_the_example_when_config_is_missing(self) -> None:
+        with TemporaryDirectory() as directory:
+            (Path(directory) / "config.example.toml").write_text("", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Copy config.example.toml to config.toml"):
+                load_memory_size(Path(directory) / "config.toml")
+
+
 class ReplyStyleConfigTests(unittest.TestCase):
     def load(self, loader, text: str):
         with TemporaryDirectory() as directory:

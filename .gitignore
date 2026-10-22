@@ -1,0 +1,9 @@
+# Your own settings and secrets
+config.toml
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
