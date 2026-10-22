@@ -101,9 +101,11 @@ as its own message once it's finished, and the typing indicator shows while the
 next one is being written. A code block is always kept in one message. The first
 message is a reply to yours; the rest follow in the channel.
 
-To make this feel natural, each message waits until it could have been typed at
-`typing_speed` characters a second, though never more than 8 seconds. Time spent
-waiting for Ollama counts towards that, so a slow model isn't held back further.
+The first message is posted as soon as its paragraph is finished, because the
+model has already taken a moment to start. To make the rest feel natural, each
+later message waits until it could have been typed at `typing_speed` characters a
+second, though never more than 8 seconds. Time spent waiting for Ollama counts
+towards that, so a slow model isn't held back further.
 
 ```toml
 reply_style = "messages"

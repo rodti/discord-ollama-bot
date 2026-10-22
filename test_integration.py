@@ -266,10 +266,15 @@ class MessagesStyleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pauses_suit_the_length_of_each_message(self) -> None:
         with mock.patch.object(bot_module, "TYPING_SPEED", 10):
-            await self.render("x" * 30 + "\n\n" + "y" * 500)
-        self.assertEqual(len(self.pauses), 2)
-        self.assertAlmostEqual(self.pauses[0], 3.0, delta=0.1)
+            await self.render("x" * 30 + "\n\n" + "y" * 40 + "\n\n" + "z" * 500)
+        self.assertEqual(len(self.pauses), 2)  # none before the first message
+        self.assertAlmostEqual(self.pauses[0], 4.0, delta=0.1)
         self.assertAlmostEqual(self.pauses[1], bot_module.MAX_TYPING_PAUSE, delta=0.1)
+
+    async def test_the_first_message_is_posted_without_a_pause(self) -> None:
+        with mock.patch.object(bot_module, "TYPING_SPEED", 10):
+            await self.render("A long first paragraph that would take a while to type.")
+        self.assertEqual(self.pauses, [])
 
     async def test_no_pauses_when_typing_speed_is_zero(self) -> None:
         await self.render("One.\n\nTwo.")

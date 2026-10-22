@@ -23,7 +23,8 @@ memory_size = 20
 reply_style = "messages"
 
 # For "messages": how fast the bot appears to type, in characters per second.
-# Each message waits until it could have been typed at this speed (at most 8 seconds).
+# The first message posts straight away; each later one waits until it could have been
+# typed at this speed (at most 8 seconds).
 # 15 is a fast human typist; 0 posts each paragraph as soon as it's finished.
 typing_speed = 15
 

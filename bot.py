@@ -170,16 +170,17 @@ class OllamaDiscordBot(discord.Client):
     ) -> None:
         """Post the reply a paragraph at a time, like someone typing in Discord.
 
-        Each paragraph is posted once it's finished, after a pause that suits its
-        length at TYPING_SPEED characters a second. Time spent waiting for Ollama
-        counts towards that pause. The typing indicator shows in between.
+        The first paragraph is posted as soon as it's finished, since the model has
+        already kept people waiting. Each later one waits until it could have been
+        typed at TYPING_SPEED characters a second; time spent waiting for Ollama
+        counts towards that. The typing indicator shows in between.
         """
         posted = 0
         last_post = time.monotonic()
 
         async def post(text: str) -> None:
             nonlocal posted, last_post
-            if TYPING_SPEED > 0:
+            if posted and TYPING_SPEED > 0:
                 pause = min(len(text) / TYPING_SPEED, MAX_TYPING_PAUSE)
                 remaining = pause - (time.monotonic() - last_post)
                 if remaining > 0:
