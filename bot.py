@@ -24,7 +24,10 @@ from utils import split_message
 load_dotenv()
 
 CONFIG_FILE = os.getenv("CONFIG_FILE", "config.toml")
-REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "120"))
+# How long Ollama may go without sending anything before the bot gives up. This is not a
+# limit on the whole reply: a long answer can stream for as long as it needs. The wait for
+# the first word includes loading the model, which can take minutes for a large one.
+REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "300"))
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -61,7 +64,7 @@ class OllamaDiscordBot(discord.Client):
         self.ollama_http: aiohttp.ClientSession | None = None
 
     async def setup_hook(self) -> None:
-        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=REQUEST_TIMEOUT)
         self.ollama_http = aiohttp.ClientSession(timeout=timeout)
 
     async def close(self) -> None:
@@ -223,14 +226,24 @@ class OllamaDiscordBot(discord.Client):
                     await self.render_stream(
                         message, self.stream_ollama(message.channel.id, prompt)
                     )
-            except StreamFailureShown:
-                log.exception("Ollama streaming failed after the Discord reply started")
+            except StreamFailureShown as exc:
+                if isinstance(exc.__cause__, asyncio.TimeoutError):
+                    self.log_timeout(message.channel.id)
+                else:
+                    log.exception("Ollama streaming failed")
             except asyncio.TimeoutError:
-                log.warning("Ollama request timed out for channel %s", message.channel.id)
+                self.log_timeout(message.channel.id)
                 await self.send_generic_failure(message)
             except Exception:
                 log.exception("Ollama request failed")
                 await self.send_generic_failure(message)
+
+    def log_timeout(self, channel_id: int) -> None:
+        log.warning(
+            "Ollama sent nothing for %g seconds (model %s, channel %s). It may still be "
+            "loading the model or short of memory; raise REQUEST_TIMEOUT if it needs longer.",
+            REQUEST_TIMEOUT, PERSONALITY.model, channel_id,
+        )
 
     async def send_generic_failure(self, message: discord.Message) -> None:
         try:

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 
@@ -148,6 +149,49 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             reference=None,
         )
         self.assertTrue(await self.bot.should_respond(message))
+
+    async def test_timeout_limits_silence_not_the_whole_reply(self) -> None:
+        bot = bot_module.OllamaDiscordBot()
+        await bot.setup_hook()
+        try:
+            timeout = bot.ollama_http.timeout
+            self.assertIsNone(timeout.total)
+            self.assertEqual(timeout.sock_read, bot_module.REQUEST_TIMEOUT)
+        finally:
+            await bot.ollama_http.close()
+
+    async def test_a_timeout_is_logged_as_one_warning_line(self) -> None:
+        class TimingOutSession:
+            def post(self, *_args, **_kwargs):
+                raise asyncio.TimeoutError
+
+        class Typing:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+        channel = FakeChannel()
+        channel.id = 123
+        channel.typing = Typing
+        source = FakeSourceMessage(channel)
+        source.author = SimpleNamespace(bot=False)
+        source.content = "hello"
+
+        async def respond(_message):
+            return True
+
+        self.bot.should_respond = respond
+        self.bot.ollama_http = TimingOutSession()  # type: ignore[assignment]
+        with self.assertLogs("ollama-discord-bot", level="WARNING") as logs:
+            await self.bot.on_message(source)  # type: ignore[arg-type]
+
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("Ollama sent nothing for", logs.output[0])
+        self.assertIsNone(logs.records[0].exc_info)
+        assert source.first_reply is not None
+        self.assertEqual(source.first_reply.content, bot_module.FAILURE_MESSAGE)
 
 
 if __name__ == "__main__":

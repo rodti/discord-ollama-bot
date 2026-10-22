@@ -108,6 +108,18 @@ stream_update_interval = 0.75
 The value is measured in seconds and must be at least `0.25`. Lower values look
 more responsive but cause more Discord API requests.
 
+### Configure the timeout
+
+The bot gives up if Ollama sends nothing for 300 seconds. This limits silence,
+not the whole reply, so a long answer can keep streaming. The wait for the first
+word includes loading the model, which can take a few minutes for a large model
+or when the computer is short of memory. To change it, set `REQUEST_TIMEOUT` (in
+seconds) in `.env`:
+
+```text
+REQUEST_TIMEOUT=600
+```
+
 Start the bot:
 
 ```bash
