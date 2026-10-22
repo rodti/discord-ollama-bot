@@ -16,9 +16,11 @@ from personalities import (
     load_memory_size,
     load_ollama_url,
     load_personality,
+    load_reply_style,
     load_stream_update_interval,
+    load_typing_speed,
 )
-from utils import split_message
+from utils import split_message, take_finished_paragraphs
 
 
 load_dotenv()
@@ -35,6 +37,9 @@ logging.basicConfig(
 )
 log = logging.getLogger("ollama-discord-bot")
 FAILURE_MESSAGE = "I'm not working properly at the moment. Please try again later."
+# The longest the bot pauses before one message, however long it is, so a big
+# paragraph or code block doesn't leave people waiting.
+MAX_TYPING_PAUSE = 8.0
 
 
 class StreamFailureShown(Exception):
@@ -47,6 +52,8 @@ try:
     PERSONALITY = load_personality(CONFIG_FILE, DEFAULT_OLLAMA_MODEL)
     MEMORY_SIZE = load_memory_size(CONFIG_FILE)
     STREAM_UPDATE_INTERVAL = load_stream_update_interval(CONFIG_FILE)
+    REPLY_STYLE = load_reply_style(CONFIG_FILE)
+    TYPING_SPEED = load_typing_speed(CONFIG_FILE)
 except ValueError as exc:
     raise SystemExit(f"Configuration error: {exc}") from exc
 
@@ -151,6 +158,68 @@ class OllamaDiscordBot(discord.Client):
         history.append({"role": "assistant", "content": answer})
 
     async def render_stream(
+        self, source: discord.Message, chunks: AsyncIterator[str]
+    ) -> None:
+        if REPLY_STYLE == "messages":
+            await self.render_as_messages(source, chunks)
+        else:
+            await self.render_as_edits(source, chunks)
+
+    async def render_as_messages(
+        self, source: discord.Message, chunks: AsyncIterator[str]
+    ) -> None:
+        """Post the reply a paragraph at a time, like someone typing in Discord.
+
+        Each paragraph is posted once it's finished, after a pause that suits its
+        length at TYPING_SPEED characters a second. Time spent waiting for Ollama
+        counts towards that pause. The typing indicator shows in between.
+        """
+        posted = 0
+        last_post = time.monotonic()
+
+        async def post(text: str) -> None:
+            nonlocal posted, last_post
+            if TYPING_SPEED > 0:
+                pause = min(len(text) / TYPING_SPEED, MAX_TYPING_PAUSE)
+                remaining = pause - (time.monotonic() - last_post)
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
+            if posted == 0:
+                await source.reply(text, mention_author=False)
+            else:
+                await source.channel.send(text)
+            posted += 1
+            last_post = time.monotonic()
+
+        buffer = ""
+        try:
+            async for content in chunks:
+                buffer += content
+                finished, buffer = take_finished_paragraphs(buffer)
+                for paragraph in finished:
+                    await post(paragraph)
+                    await self.show_typing(source.channel)
+            if buffer.strip():
+                for piece in split_message(buffer):
+                    await post(piece)
+        except Exception as exc:
+            try:
+                if posted:
+                    await source.channel.send(FAILURE_MESSAGE)
+                else:
+                    await source.reply(FAILURE_MESSAGE, mention_author=False)
+            except discord.DiscordException:
+                log.exception("Could not show the generic streaming failure message")
+            raise StreamFailureShown from exc
+
+    async def show_typing(self, channel: discord.abc.Messageable) -> None:
+        """Show the typing indicator straight away; posting a message hides it."""
+        try:
+            await channel.typing()
+        except discord.DiscordException:
+            pass
+
+    async def render_as_edits(
         self, source: discord.Message, chunks: AsyncIterator[str]
     ) -> None:
         response_messages: list[discord.Message] = []

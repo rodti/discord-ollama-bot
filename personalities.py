@@ -42,6 +42,25 @@ def load_stream_update_interval(config_path: str | Path) -> float:
     return float(interval)
 
 
+REPLY_STYLES = ("messages", "edit")
+
+
+def load_reply_style(config_path: str | Path) -> str:
+    config = load_config(config_path)
+    style = config.get("reply_style", "messages")
+    if style not in REPLY_STYLES:
+        raise ValueError('reply_style must be "messages" or "edit"')
+    return style
+
+
+def load_typing_speed(config_path: str | Path) -> float:
+    config = load_config(config_path)
+    speed = config.get("typing_speed", 15)
+    if not isinstance(speed, (int, float)) or isinstance(speed, bool) or speed < 0:
+        raise ValueError("typing_speed must be a number of zero or greater")
+    return float(speed)
+
+
 def load_default_model(config_path: str | Path) -> str:
     config = load_config(config_path)
     model = config.get("default_model")

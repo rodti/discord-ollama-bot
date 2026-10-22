@@ -8,9 +8,11 @@ from personalities import (
     load_memory_size,
     load_ollama_url,
     load_personality,
+    load_reply_style,
     load_stream_update_interval,
+    load_typing_speed,
 )
-from utils import split_message
+from utils import split_message, take_finished_paragraphs
 
 
 class SplitMessageTests(unittest.TestCase):
@@ -176,6 +178,53 @@ class StreamingConfigTests(unittest.TestCase):
             path.write_text('ollama_url = "192.168.1.50:11434"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "complete"):
                 load_ollama_url(path)
+
+
+class ReplyStyleConfigTests(unittest.TestCase):
+    def load(self, loader, text: str):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            path.write_text(text, encoding="utf-8")
+            return loader(path)
+
+    def test_defaults_to_messages_at_fifteen_characters_a_second(self) -> None:
+        self.assertEqual(self.load(load_reply_style, ""), "messages")
+        self.assertEqual(self.load(load_typing_speed, ""), 15.0)
+
+    def test_edit_style_can_be_chosen(self) -> None:
+        self.assertEqual(self.load(load_reply_style, 'reply_style = "edit"\n'), "edit")
+
+    def test_rejects_unknown_style(self) -> None:
+        with self.assertRaisesRegex(ValueError, "reply_style"):
+            self.load(load_reply_style, 'reply_style = "shout"\n')
+
+    def test_rejects_negative_typing_speed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "typing_speed"):
+            self.load(load_typing_speed, "typing_speed = -1\n")
+
+
+class FinishedParagraphTests(unittest.TestCase):
+    def test_a_paragraph_is_finished_when_a_blank_line_follows(self) -> None:
+        self.assertEqual(take_finished_paragraphs("One.\n\nTwo"), (["One."], "Two"))
+
+    def test_an_unfinished_paragraph_waits(self) -> None:
+        self.assertEqual(take_finished_paragraphs("One.\nStill one"), ([], "One.\nStill one"))
+
+    def test_extra_blank_lines_make_no_empty_messages(self) -> None:
+        self.assertEqual(take_finished_paragraphs("One.\n\n\n\nTwo.\n\n"), (["One.", "Two."], ""))
+
+    def test_an_open_code_block_waits_for_its_end(self) -> None:
+        text = "```\na\n\nb"
+        self.assertEqual(take_finished_paragraphs(text), ([], text))
+        self.assertEqual(
+            take_finished_paragraphs(text + "\n```\n\nAfter"), (["```\na\n\nb\n```"], "After")
+        )
+
+    def test_a_paragraph_longer_than_discord_allows_is_released_in_pieces(self) -> None:
+        finished, remainder = take_finished_paragraphs("word " * 500, limit=100)
+        self.assertTrue(finished)
+        self.assertTrue(all(len(piece) <= 100 for piece in finished))
+        self.assertLessEqual(len(remainder.strip()), 100)
 
 
 if __name__ == "__main__":

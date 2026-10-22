@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 import bot as bot_module
@@ -53,14 +54,34 @@ class FakeSentMessage:
         self.edits.append(content)
 
 
+class FakeTyping:
+    def __init__(self, channel: "FakeChannel") -> None:
+        self.channel = channel
+
+    def __await__(self):
+        self.channel.events.append("typing")
+        return iter(())
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+
 class FakeChannel:
     def __init__(self, previous_author_id: int | None = None) -> None:
         self.sent: list[FakeSentMessage] = []
         self.previous_author_id = previous_author_id
+        self.events: list[str] = []
+
+    def typing(self) -> FakeTyping:
+        return FakeTyping(self)
 
     async def send(self, content: str) -> FakeSentMessage:
         message = FakeSentMessage(content)
         self.sent.append(message)
+        self.events.append(content)
         return message
 
     async def history(self, **_kwargs):
@@ -75,6 +96,7 @@ class FakeSourceMessage:
 
     async def reply(self, content: str, **_kwargs) -> FakeSentMessage:
         self.first_reply = FakeSentMessage(content)
+        self.channel.events.append(content)
         return self.first_reply
 
 
@@ -110,7 +132,7 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             yield " there"
 
         source = FakeSourceMessage(FakeChannel())
-        await self.bot.render_stream(source, chunks())  # type: ignore[arg-type]
+        await self.bot.render_as_edits(source, chunks())  # type: ignore[arg-type]
 
         assert source.first_reply is not None
         self.assertEqual(source.first_reply.content, "Hello there")
@@ -124,7 +146,7 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(source.first_reply)
             yield "Actual response"
 
-        await self.bot.render_stream(source, delayed_chunks())  # type: ignore[arg-type]
+        await self.bot.render_as_edits(source, delayed_chunks())  # type: ignore[arg-type]
         assert source.first_reply is not None
         self.assertEqual(source.first_reply.content, "Actual response")
 
@@ -135,7 +157,7 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         source = FakeSourceMessage(FakeChannel())
         with self.assertRaises(bot_module.StreamFailureShown):
-            await self.bot.render_stream(source, broken_stream())  # type: ignore[arg-type]
+            await self.bot.render_as_edits(source, broken_stream())  # type: ignore[arg-type]
 
         assert source.first_reply is not None
         self.assertEqual(source.first_reply.content, bot_module.FAILURE_MESSAGE)
@@ -165,16 +187,8 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             def post(self, *_args, **_kwargs):
                 raise asyncio.TimeoutError
 
-        class Typing:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *_args):
-                return None
-
         channel = FakeChannel()
         channel.id = 123
-        channel.typing = Typing
         source = FakeSourceMessage(channel)
         source.author = SimpleNamespace(bot=False)
         source.content = "hello"
@@ -192,6 +206,85 @@ class BotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(logs.records[0].exc_info)
         assert source.first_reply is not None
         self.assertEqual(source.first_reply.content, bot_module.FAILURE_MESSAGE)
+
+
+class MessagesStyleTests(unittest.IsolatedAsyncioTestCase):
+    """Replies posted a paragraph at a time, like someone typing."""
+
+    async def asyncSetUp(self) -> None:
+        self.bot = bot_module.OllamaDiscordBot()
+        self.pauses: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            self.pauses.append(seconds)
+
+        self.patches = [
+            mock.patch.object(bot_module, "REPLY_STYLE", "messages"),
+            mock.patch.object(bot_module, "TYPING_SPEED", 0),
+            mock.patch.object(bot_module.asyncio, "sleep", fake_sleep),
+        ]
+        for patch in self.patches:
+            patch.start()
+
+    async def asyncTearDown(self) -> None:
+        for patch in self.patches:
+            patch.stop()
+
+    async def render(self, *parts: str) -> FakeChannel:
+        async def chunks():
+            for part in parts:
+                yield part
+
+        channel = FakeChannel()
+        await self.bot.render_stream(FakeSourceMessage(channel), chunks())  # type: ignore[arg-type]
+        return channel
+
+    async def test_each_paragraph_is_its_own_message_with_typing_between(self) -> None:
+        channel = await self.render("Hello there", "!\n\nSecond para", "graph.\n\nThird.")
+        self.assertEqual(
+            channel.events,
+            ["Hello there!", "typing", "Second paragraph.", "typing", "Third."],
+        )
+
+    async def test_the_first_message_is_a_reply_and_the_rest_are_sent(self) -> None:
+        channel = FakeChannel()
+        source = FakeSourceMessage(channel)
+
+        async def chunks():
+            yield "One.\n\nTwo."
+
+        await self.bot.render_stream(source, chunks())  # type: ignore[arg-type]
+        assert source.first_reply is not None
+        self.assertEqual(source.first_reply.content, "One.")
+        self.assertEqual([m.content for m in channel.sent], ["Two."])
+
+    async def test_a_code_block_with_blank_lines_stays_in_one_message(self) -> None:
+        code = "```python\nx = 1\n\ny = 2\n```"
+        channel = await self.render("Here:\n\n", code, "\n\nDone.")
+        posts = [event for event in channel.events if event != "typing"]
+        self.assertEqual(posts, ["Here:", code, "Done."])
+
+    async def test_pauses_suit_the_length_of_each_message(self) -> None:
+        with mock.patch.object(bot_module, "TYPING_SPEED", 10):
+            await self.render("x" * 30 + "\n\n" + "y" * 500)
+        self.assertEqual(len(self.pauses), 2)
+        self.assertAlmostEqual(self.pauses[0], 3.0, delta=0.1)
+        self.assertAlmostEqual(self.pauses[1], bot_module.MAX_TYPING_PAUSE, delta=0.1)
+
+    async def test_no_pauses_when_typing_speed_is_zero(self) -> None:
+        await self.render("One.\n\nTwo.")
+        self.assertEqual(self.pauses, [])
+
+    async def test_a_failure_after_some_messages_adds_the_generic_message(self) -> None:
+        async def broken():
+            yield "Fine so far.\n\n"
+            raise RuntimeError("secret internal error")
+
+        channel = FakeChannel()
+        with self.assertRaises(bot_module.StreamFailureShown):
+            await self.bot.render_stream(FakeSourceMessage(channel), broken())  # type: ignore[arg-type]
+        posts = [event for event in channel.events if event != "typing"]
+        self.assertEqual(posts, ["Fine so far.", bot_module.FAILURE_MESSAGE])
 
 
 if __name__ == "__main__":

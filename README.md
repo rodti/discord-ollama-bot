@@ -94,19 +94,37 @@ This is the maximum number of previous messages sent between users and the bot t
 
 Memory is maintained separately for each Discord channel or direct-message conversation and is stored in memory only. Set the value to `0` to make every request independent. Restart the bot after changing it.
 
-### Configure streaming speed
+### Configure how replies appear
 
-Ollama responses are streamed into Discord by progressively updating the bot's
-message. While waiting for the first text, Discord's typing indicator is shown;
-the bot does not post a placeholder message. The update interval is configurable
-in `config.toml`:
+By default the bot replies like someone typing in Discord. Each paragraph is posted
+as its own message once it's finished, and the typing indicator shows while the
+next one is being written. A code block is always kept in one message. The first
+message is a reply to yours; the rest follow in the channel.
+
+To make this feel natural, each message waits until it could have been typed at
+`typing_speed` characters a second, though never more than 8 seconds. Time spent
+waiting for Ollama counts towards that, so a slow model isn't held back further.
 
 ```toml
+reply_style = "messages"
+typing_speed = 15
+```
+
+Set `typing_speed` to `0` to post each paragraph as soon as it's finished, or a
+higher number to type faster.
+
+To have the bot post one message and keep updating it as the text arrives
+instead, set:
+
+```toml
+reply_style = "edit"
 stream_update_interval = 0.75
 ```
 
-The value is measured in seconds and must be at least `0.25`. Lower values look
-more responsive but cause more Discord API requests.
+`stream_update_interval` is the time between updates in seconds, at least `0.25`.
+Lower values look more responsive but cause more Discord API requests.
+
+Restart the bot after changing any of these.
 
 ### Configure the timeout
 
