@@ -110,12 +110,12 @@ message is a reply to yours; the rest follow in the channel.
 The first message is posted as soon as its paragraph is finished, because the
 model has already taken a moment to start. To make the rest feel natural, each
 later message waits until it could have been typed at `typing_speed` characters a
-second, though never more than 8 seconds. Time spent waiting for Ollama counts
+second, though never more than 4 seconds. Time spent waiting for Ollama counts
 towards that, so a slow model isn't held back further.
 
 ```toml
 reply_style = "messages"
-typing_speed = 15
+typing_speed = 30
 ```
 
 Set `typing_speed` to `0` to post each paragraph as soon as it's finished, or a

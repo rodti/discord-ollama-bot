@@ -195,9 +195,9 @@ class ReplyStyleConfigTests(unittest.TestCase):
             path.write_text(text, encoding="utf-8")
             return loader(path)
 
-    def test_defaults_to_messages_at_fifteen_characters_a_second(self) -> None:
+    def test_defaults_to_messages_at_thirty_characters_a_second(self) -> None:
         self.assertEqual(self.load(load_reply_style, ""), "messages")
-        self.assertEqual(self.load(load_typing_speed, ""), 15.0)
+        self.assertEqual(self.load(load_typing_speed, ""), 30.0)
 
     def test_edit_style_can_be_chosen(self) -> None:
         self.assertEqual(self.load(load_reply_style, 'reply_style = "edit"\n'), "edit")

@@ -28,9 +28,9 @@ reply_style = "messages"
 
 # For "messages": how fast the bot appears to type, in characters per second.
 # The first message posts straight away; each later one waits until it could have been
-# typed at this speed (at most 8 seconds).
-# 15 is a fast human typist; 0 posts each paragraph as soon as it's finished.
-typing_speed = 15
+# typed at this speed (at most 4 seconds).
+# 30 is about twice a fast human typist; 0 posts each paragraph as soon as it's finished.
+typing_speed = 30
 
 # For "edit": minimum seconds between visible Discord updates while Ollama is generating.
 stream_update_interval = 0.75

@@ -39,7 +39,7 @@ log = logging.getLogger("ollama-discord-bot")
 FAILURE_MESSAGE = "I'm not working properly at the moment. Please try again later."
 # The longest the bot pauses before one message, however long it is, so a big
 # paragraph or code block doesn't leave people waiting.
-MAX_TYPING_PAUSE = 8.0
+MAX_TYPING_PAUSE = 4.0
 
 
 class StreamFailureShown(Exception):

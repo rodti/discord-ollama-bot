@@ -57,7 +57,7 @@ def load_reply_style(config_path: str | Path) -> str:
 
 def load_typing_speed(config_path: str | Path) -> float:
     config = load_config(config_path)
-    speed = config.get("typing_speed", 15)
+    speed = config.get("typing_speed", 30)
     if not isinstance(speed, (int, float)) or isinstance(speed, bool) or speed < 0:
         raise ValueError("typing_speed must be a number of zero or greater")
     return float(speed)
